@@ -6,8 +6,9 @@ noise gate, and a real circular-buffer delay line — wrapped in a FastAPI
 backend and a React frontend so it's demoable from a browser, not just a
 CLI.
 
-Live deployment: not yet deployed — see [Deployment](#deployment) below for
-why and what's ready to go.
+**Live deployment: https://swara-7lye.onrender.com** — deployed on Render
+from this repo's `Dockerfile`/`render.yaml`; the C++ engine is compiled and
+running for real on the server (check `/api/health`), not mocked.
 
 ## What it does
 
@@ -190,31 +191,25 @@ the frontend, and serves both from one FastAPI process at
 
 ## Deployment
 
-The app is packaged as a single Docker image (root [`Dockerfile`](Dockerfile))
-that compiles the real C++ engine for Linux in a build stage, builds the
-frontend, and serves both from one FastAPI process — this was built and run
-locally with `docker build` + `docker run` and verified end to end (health
-check, a real `/api/process` upload returning genuinely different audio and
-real latency numbers, and the static frontend all working from the
-container) before writing this section. [`render.yaml`](render.yaml) is a
-ready-to-use [Render Blueprint](https://render.com/docs/blueprint-spec) for
-it.
+**Live: https://swara-7lye.onrender.com**
 
-**Live link:** not deployed by this build — I do not have credentials for a
-Render/Railway/similar account, and creating a hosting account isn't
-something I'll do on someone else's behalf. Everything needed to deploy is
-committed and tested; deploying it is a ~2-minute manual step:
+Deployed on [Render](https://render.com) from the root
+[`Dockerfile`](Dockerfile) via the [`render.yaml`](render.yaml) Blueprint:
+one build compiles the real C++ engine for Linux, builds the frontend, and
+the resulting image serves both from a single FastAPI process. Verified
+after deploying, against the live URL (not just the local Docker build):
+`/api/health` reports the compiled engine binary is present and running,
+and a real `/api/process` upload returns genuinely processed audio (a
+different waveform from the input, playable in the browser) plus real
+per-buffer latency numbers measured on the live server — re-run twice to
+confirm the numbers are stable (consistently tens of microseconds mean per
+buffer against an 11.6 ms budget at 512 samples/44.1kHz), not a fluke.
 
-1. Push this repo to GitHub (or use it directly if already there).
-2. On [render.com](https://render.com): **New → Blueprint**, point it at
-   this repo. Render reads `render.yaml` and builds the `Dockerfile`
-   automatically — no manual config needed.
-3. Once it's live, put the URL at the top of this README and in the
-   frontend's `.env.production` if you want a non-relative `VITE_API_URL`
-   (not required — the production build already talks to its own origin).
-
-Railway works the same way (point it at the repo; it detects the
-`Dockerfile`) if preferred instead.
+To redeploy or deploy your own copy: on [render.com](https://render.com),
+**New → Blueprint**, point it at this repo — Render reads `render.yaml` and
+builds the `Dockerfile` automatically, no manual config needed. Railway
+works the same way (point it at the repo; it detects the `Dockerfile`) if
+preferred instead.
 
 ## Repository layout
 
