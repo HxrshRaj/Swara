@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import "./App.css";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+// "" means same-origin (used in production, where the backend serves this
+// built app itself); nullish coalescing keeps that distinct from "unset".
+const API_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 
 const EFFECTS = [
   { key: "lowpass", label: "Lowpass filter (Butterworth IIR)" },

@@ -1,0 +1,14 @@
+# Render Blueprint: one service, built from the root Dockerfile, which
+# compiles the C++ engine for Linux, builds the frontend, and serves both
+# from a single FastAPI process. See README.md "Deployment" for the
+# manual (dashboard, no CLI) steps this corresponds to.
+services:
+  - type: web
+    name: swara
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: SWARA_CORS_ORIGINS
+        value: "*"
+    healthCheckPath: /api/health

@@ -5,6 +5,7 @@ import tempfile
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .engine_bridge import EngineError, ENGINE_PATH, VALID_EFFECTS, engine_available, run_engine
@@ -116,3 +117,13 @@ async def process_audio(
         )
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
+
+
+# In the deployed container the frontend is built and copied alongside the
+# backend; mount it after the /api/* routes so those take precedence over
+# the static-file catch-all. In local dev the dist/ directory won't exist
+# (the frontend runs on its own Vite dev server instead), so this is a
+# no-op there.
+_FRONTEND_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "frontend", "dist")
+if os.path.isdir(_FRONTEND_DIST):
+    app.mount("/", StaticFiles(directory=_FRONTEND_DIST, html=True), name="frontend")
