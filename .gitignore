@@ -1,0 +1,30 @@
+# C++ build artifacts
+engine/build/
+*.o
+*.exe
+!engine/tools/*.exe
+
+# Generated/scratch test audio (regenerate with engine/tools/gen_test_signal.py)
+engine/test_audio/
+
+# Python
+__pycache__/
+*.pyc
+backend/venv/
+backend/.venv/
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Backend runtime artifacts
+backend/uploads/
+backend/outputs/
+backend/*.db
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+*.log
