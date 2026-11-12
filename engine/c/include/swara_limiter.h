@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-typedef struct {
+typedef struct swara_limiter {
     float threshold;       /* linear peak ceiling, (0, 1] */
     float attack_coeff;    /* per-sample smoothing when gain must drop */
     float release_coeff;   /* per-sample smoothing when gain recovers */

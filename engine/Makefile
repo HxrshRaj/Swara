@@ -27,7 +27,7 @@ C_OBJS = $(patsubst third_party/kissfft/%.c,$(BUILD)/kissfft_%.o,$(C_SRCS))
 RT_SRCS = c/src/swara_ring.c c/src/swara_limiter.c
 RT_OBJS = $(patsubst c/src/%.c,$(BUILD)/rt_%.o,$(RT_SRCS))
 
-.PHONY: all clean test test-asan test-tsan engine-tsan coverage fuzz fuzz-libfuzzer
+.PHONY: all clean test test-asan test-tsan engine-tsan coverage fuzz fuzz-libfuzzer objc-test
 
 all: $(BIN)
 
@@ -92,3 +92,16 @@ fuzz: | $(BUILD)
 fuzz-libfuzzer: | $(BUILD)
 	clang -std=c11 -g -O1 -fsanitize=fuzzer,address,undefined -Ic/include c/tests/fuzz_rt.c c/src/swara_ring.c c/src/swara_limiter.c -lm -o $(BUILD)/fuzz_lf
 	./$(BUILD)/fuzz_lf -max_total_time=$(FUZZ_SECS)
+
+# ---- Objective-C wrappers (built with GNUstep on Linux; also valid on macOS/iOS toolchains) ----
+# Needs: gobjc, libgnustep-base-dev, gnustep-make.   make objc-test
+# The C11 files are compiled as C; only the .m files are compiled as Objective-C.
+OBJC_FLAGS = -std=gnu11 -O1 -g -Wall -Wno-unused-parameter -Wno-expansion-to-defined `gnustep-config --objc-flags` -Ic/include -Iobjc/include
+objc-test: | $(BUILD)
+	$(CC) -std=c11 -O1 -g -Wall -Wextra -Wpedantic -Werror -Ic/include -c c/src/swara_ring.c -o $(BUILD)/objc_ring.o
+	$(CC) -std=c11 -O1 -g -Wall -Wextra -Wpedantic -Werror -Ic/include -c c/src/swara_limiter.c -o $(BUILD)/objc_lim.o
+	$(CC) $(OBJC_FLAGS) -c objc/src/SWRingBuffer.m -o $(BUILD)/SWRingBuffer.o
+	$(CC) $(OBJC_FLAGS) -c objc/src/SWLimiter.m -o $(BUILD)/SWLimiter.o
+	$(CC) $(OBJC_FLAGS) -c objc/tests/main.m -o $(BUILD)/objc_main.o
+	$(CC) $(BUILD)/objc_ring.o $(BUILD)/objc_lim.o $(BUILD)/SWRingBuffer.o $(BUILD)/SWLimiter.o $(BUILD)/objc_main.o `gnustep-config --base-libs` -pthread -lm -o $(BUILD)/objc_tests
+	./$(BUILD)/objc_tests

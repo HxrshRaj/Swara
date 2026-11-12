@@ -26,6 +26,15 @@ jobs:
       - name: Fuzz-style random inputs under ASan and UBSan (1,000,000 inputs)
         run: make fuzz CC=${{ matrix.cc }}
 
+  objective-c:
+    name: Objective-C wrappers (GNUstep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y gobjc libgnustep-base-dev gnustep-make
+      - name: Build and test the Objective-C wrappers
+        run: make -C engine objc-test
+
   coverage:
     runs-on: ubuntu-latest
     steps:

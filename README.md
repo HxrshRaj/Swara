@@ -233,13 +233,16 @@ per second over three runs of `bench_ring` on that machine.
 Honest limits: the module is not certified and makes no claim of MISRA C or DO-178C compliance; the
 benchmark is from one shared cloud machine, so treat the numbers as indicative; the threaded mode is for
 one file at a time, not a live audio device.
-Details: [`engine/c/README.md`](engine/c/README.md).
+Objective-C wrappers (`engine/objc/`, `SWRingBuffer` and `SWLimiter`, 46 checks) show the same C core used from
+Objective-C; they are built with GNUstep on Linux in CI and not yet built with Xcode.
+Details: [`engine/c/README.md`](engine/c/README.md), [`engine/objc/README.md`](engine/objc/README.md).
 
 ## Repository layout
 
 ```
 engine/     C++ DSP engine (filters, FFT noise gate, delay line, CLI, tests)
 engine/c/   C11 module: lock-free ring buffer and peak limiter, with tests (see engine/c/README.md)
+engine/objc/ Objective-C wrappers around the C module, with tests (see engine/objc/README.md)
 backend/    FastAPI service wrapping the engine
 frontend/   React UI
 docs/       DSP design notes (docs/dsp-design.md)

@@ -3,15 +3,19 @@
  * No malloc: the caller provides the storage. Not certified code. */
 #ifndef SWARA_RING_H
 #define SWARA_RING_H
+#if !defined(__cplusplus) && !defined(__OBJC__)
 #include <stdatomic.h>
+#endif
 #include <stddef.h>
 #include <stdint.h>
 #include "swara_status.h"
 
-#ifdef __cplusplus
-/* C++ sees the ring as an opaque type: allocate swara_ring_sizeof() bytes aligned to
+#if defined(__cplusplus) || defined(__OBJC__)
+/* C++ and Objective-C see the ring as an opaque type (GCC's Objective-C front end does not implement _Atomic): allocate swara_ring_sizeof() bytes aligned to
  * swara_ring_alignof() and pass the pointer to swara_ring_init(). */
+#ifdef __cplusplus
 extern "C" {
+#endif
 typedef struct swara_ring swara_ring;
 #else
 struct swara_ring {
