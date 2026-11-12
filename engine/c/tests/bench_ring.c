@@ -9,7 +9,7 @@ static float storage[4096];
 static swara_ring ring;
 
 static void *producer(void *a) {
-    (void)a; float chunk[64] = {0}; unsigned sent = 0;
+    (void)a; const float chunk[64] = {0}; unsigned sent = 0;
     while (sent < TOTAL) if (swara_ring_write(&ring, chunk, 64) == SWARA_OK) sent += 64u;
     return NULL;
 }
