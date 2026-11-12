@@ -34,7 +34,7 @@ def _default_engine_path() -> str:
 
 ENGINE_PATH = os.environ.get("SWARA_ENGINE_PATH", _default_engine_path())
 
-VALID_EFFECTS = {"lowpass", "highpass", "delay", "noisegate"}
+VALID_EFFECTS = {"lowpass", "highpass", "delay", "noisegate", "limiter"}
 
 
 @dataclass
@@ -57,6 +57,7 @@ def run_engine(
     buffer_size: int = 512,
     params: Optional[dict] = None,
     benchmark_sizes: Optional[list[int]] = None,
+    threaded: bool = False,
 ) -> ProcessResult:
     if not effects:
         raise EngineError("At least one effect must be selected")
@@ -95,10 +96,16 @@ def run_engine(
         "gate_threshold_db": "--gate-threshold-db",
         "gate_floor_db": "--gate-floor-db",
         "gate_knee_db": "--gate-knee-db",
+        "limiter_threshold": "--limiter-threshold",
+        "limiter_attack_ms": "--limiter-attack-ms",
+        "limiter_release_ms": "--limiter-release-ms",
     }
     for key, flag in flag_map.items():
         if key in params and params[key] is not None:
             cmd += [flag, str(params[key])]
+
+    if threaded:
+        cmd.append("--threaded")
 
     if benchmark_sizes:
         cmd += ["--benchmark-sizes", ",".join(str(s) for s in benchmark_sizes)]

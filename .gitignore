@@ -28,3 +28,4 @@ backend/*.db
 Thumbs.db
 .vscode/
 *.log
+build_tsan/

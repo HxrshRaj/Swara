@@ -211,10 +211,38 @@ builds the `Dockerfile` automatically, no manual config needed. Railway
 works the same way (point it at the repo; it detects the `Dockerfile`) if
 preferred instead.
 
+## C11 module: ring buffer and peak limiter
+
+`engine/c/` holds two primitives written in plain C11, with no dynamic allocation and checked arguments:
+a lock-free single-producer/single-consumer ring buffer (C11 atomics) and a peak limiter. The limiter is
+available as the `limiter` effect in the engine CLI, the API and the web UI.
+
+`engine --threaded` (also a checkbox in the web UI) runs the effect chain as a three-thread pipeline
+(reader, DSP, collector) that passes blocks through two of these ring buffers. Its output is checked to be
+sample-for-sample identical to the single-threaded path for every effect, and the whole engine runs under
+ThreadSanitizer in CI.
+
+Measured on a 2-core Xeon @ 2.10 GHz in a cloud container: 138 unit checks pass under gcc and clang,
+including AddressSanitizer, UndefinedBehaviorSanitizer and ThreadSanitizer runs (the ring buffer has a
+two-thread, 2-million-sample ordering test). Line coverage of the two C files is 100% (gcov). Fuzzing found two real
+bugs in the limiter (NaN input, and a NaN smoothing coefficient from extreme parameters, the second found by
+clang libFuzzer in CI); both are fixed with regression tests, and 1,000,000 random inputs now pass under ASan and UBSan. Breaking the limiter's output clamp or the ring's
+wrap-around on purpose makes tests fail. The two-thread ring buffer moved about 276 to 330 million samples
+per second over three runs of `bench_ring` on that machine.
+
+Honest limits: the module is not certified and makes no claim of MISRA C or DO-178C compliance; the
+benchmark is from one shared cloud machine, so treat the numbers as indicative; the threaded mode is for
+one file at a time, not a live audio device.
+Objective-C wrappers (`engine/objc/`, `SWRingBuffer` and `SWLimiter`, 46 checks) show the same C core used from
+Objective-C; they are built with GNUstep on Linux in CI and not yet built with Xcode.
+Details: [`engine/c/README.md`](engine/c/README.md), [`engine/objc/README.md`](engine/objc/README.md).
+
 ## Repository layout
 
 ```
 engine/     C++ DSP engine (filters, FFT noise gate, delay line, CLI, tests)
+engine/c/   C11 module: lock-free ring buffer and peak limiter, with tests (see engine/c/README.md)
+engine/objc/ Objective-C wrappers around the C module, with tests (see engine/objc/README.md)
 backend/    FastAPI service wrapping the engine
 frontend/   React UI
 docs/       DSP design notes (docs/dsp-design.md)
