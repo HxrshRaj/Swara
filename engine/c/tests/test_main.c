@@ -214,7 +214,7 @@ static void test_limiter_nan_and_infinity(void) {
 static void test_limiter_extreme_parameters(void) {
     /* Regression for a crash libFuzzer found: denormal time constants with a huge sample rate
        produced NaN smoothing coefficients (0 * inf). Infinite parameters are now rejected too. */
-    swara_limiter l; float in[4] = {1.0f, -1.0f, 0.5f, 3.0f}, out[4];
+    swara_limiter l; const float in[4] = {1.0f, -1.0f, 0.5f, 3.0f}; float out[4];
     CHECK(swara_limiter_init(&l, 3.9e-41f, 2.8e-15f, 1.4e-43f, INFINITY) == SWARA_ERR_ARG);
     CHECK(swara_limiter_init(&l, 0.5f, INFINITY, 10.0f, 48000.0f) == SWARA_ERR_ARG);
     CHECK(swara_limiter_init(&l, 3.9e-41f, 2.8e-15f, 1.4e-43f, 3.0e38f) == SWARA_OK);
