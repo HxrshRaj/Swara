@@ -10,6 +10,7 @@ const EFFECTS = [
   { key: "highpass", label: "Highpass filter (Butterworth IIR)" },
   { key: "delay", label: "Delay / echo (circular buffer)" },
   { key: "noisegate", label: "Spectral noise gate (STFT / FFT)" },
+  { key: "limiter", label: "Peak limiter (C11 module)" },
 ];
 
 const BUFFER_SIZES = [64, 128, 256, 512, 1024, 2048, 4096];
@@ -63,13 +64,14 @@ function LatencyTable({ stats }) {
 export default function App() {
   const [file, setFile] = useState(null);
   const [originalUrl, setOriginalUrl] = useState(null);
-  const [selected, setSelected] = useState({ lowpass: true, delay: true, noisegate: false, highpass: false });
+  const [selected, setSelected] = useState({ lowpass: true, delay: true, noisegate: false, highpass: false, limiter: false });
   const [bufferSize, setBufferSize] = useState(512);
   const [lpCutoff, setLpCutoff] = useState(4000);
   const [hpCutoff, setHpCutoff] = useState(300);
   const [delayMs, setDelayMs] = useState(300);
   const [delayFeedback, setDelayFeedback] = useState(0.35);
   const [delayMix, setDelayMix] = useState(0.35);
+  const [limiterThreshold, setLimiterThreshold] = useState(0.89);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -120,6 +122,7 @@ export default function App() {
     form.append("delay_ms", String(delayMs));
     form.append("delay_feedback", String(delayFeedback));
     form.append("delay_mix", String(delayMix));
+    form.append("limiter_threshold", String(limiterThreshold));
 
     try {
       const res = await fetch(`${API_URL}/api/process`, { method: "POST", body: form });
@@ -212,6 +215,13 @@ export default function App() {
                        onChange={(e) => setDelayMix(Number(e.target.value))} />
               </label>
             </>
+          )}
+          {selected.limiter && (
+            <label>
+              Limiter ceiling (0 to 1, linear)
+              <input type="number" step="0.05" value={limiterThreshold} min={0.05} max={1}
+                     onChange={(e) => setLimiterThreshold(Number(e.target.value))} />
+            </label>
           )}
         </div>
 

@@ -211,10 +211,28 @@ builds the `Dockerfile` automatically, no manual config needed. Railway
 works the same way (point it at the repo; it detects the `Dockerfile`) if
 preferred instead.
 
+## C11 module: ring buffer and peak limiter
+
+`engine/c/` holds two primitives written in plain C11, with no dynamic allocation and checked arguments:
+a lock-free single-producer/single-consumer ring buffer (C11 atomics) and a peak limiter. The limiter is
+available as the `limiter` effect in the engine CLI, the API and the web UI.
+
+Measured on a 2-core Xeon @ 2.10 GHz in a cloud container: 120 unit checks pass under gcc and clang,
+including AddressSanitizer, UndefinedBehaviorSanitizer and ThreadSanitizer runs (the ring buffer has a
+two-thread, 2-million-sample ordering test). Breaking the limiter's output clamp or the ring's wrap-around
+on purpose makes tests fail, so the tests do catch those bugs. The two-thread ring buffer moved about
+276 to 330 million samples per second over three runs of `bench_ring` on that machine.
+
+Honest limits: the module is not certified and makes no claim of MISRA C or DO-178C compliance; the
+benchmark is from one shared cloud machine, so treat the numbers as indicative; the ring buffer is not yet
+used to hand audio between threads in the engine itself (the engine is still single-threaded per file).
+Details: [`engine/c/README.md`](engine/c/README.md).
+
 ## Repository layout
 
 ```
 engine/     C++ DSP engine (filters, FFT noise gate, delay line, CLI, tests)
+engine/c/   C11 module: lock-free ring buffer and peak limiter, with tests (see engine/c/README.md)
 backend/    FastAPI service wrapping the engine
 frontend/   React UI
 docs/       DSP design notes (docs/dsp-design.md)

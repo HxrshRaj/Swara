@@ -1,0 +1,42 @@
+#include "swara_limiter.h"
+#include <math.h>
+
+static float coeff_from_ms(float ms, float sr) {
+    /* one-pole smoothing coefficient for a time constant of `ms` milliseconds */
+    return expf(-1.0f / (0.001f * ms * sr));
+}
+
+swara_status swara_limiter_init(swara_limiter *l, float threshold, float attack_ms,
+                                float release_ms, float sample_rate_hz) {
+    if (l == NULL) return SWARA_ERR_ARG;
+    if (!(threshold > 0.0f && threshold <= 1.0f)) return SWARA_ERR_ARG;
+    if (!(attack_ms > 0.0f && release_ms > 0.0f && sample_rate_hz > 0.0f)) return SWARA_ERR_ARG;
+    l->threshold = threshold;
+    l->attack_coeff = coeff_from_ms(attack_ms, sample_rate_hz);
+    l->release_coeff = coeff_from_ms(release_ms, sample_rate_hz);
+    l->gain = 1.0f;
+    return SWARA_OK;
+}
+
+void swara_limiter_reset(swara_limiter *l) {
+    if (l != NULL) l->gain = 1.0f;
+}
+
+swara_status swara_limiter_process(swara_limiter *l, const float *in, float *out, size_t n) {
+    if (l == NULL || (n > 0U && (in == NULL || out == NULL))) return SWARA_ERR_ARG;
+    for (size_t i = 0; i < n; ++i) {
+        float x = in[i];
+        float peak = fabsf(x);
+        /* gain needed so this sample sits at or below the threshold */
+        float target = (peak > l->threshold) ? (l->threshold / peak) : 1.0f;
+        /* move gain toward target: fast when reducing, slow when recovering */
+        float c = (target < l->gain) ? l->attack_coeff : l->release_coeff;
+        l->gain = c * l->gain + (1.0f - c) * target;
+        float y = x * l->gain;
+        /* hard guarantee: smoothing can lag, so clamp the final sample to the ceiling */
+        if (y > l->threshold) y = l->threshold;
+        if (y < -l->threshold) y = -l->threshold;
+        out[i] = y;
+    }
+    return SWARA_OK;
+}

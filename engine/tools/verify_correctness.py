@@ -23,7 +23,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 from gen_test_signal import read_wav, SR  # noqa: E402
 
-ENGINE = os.path.join(os.path.dirname(__file__), "..", "build", "swara_engine.exe")
+ENGINE = os.path.join(os.path.dirname(__file__), "..", "build", "swara_engine.exe" if os.name == "nt" else "swara_engine")
 AUDIO = os.path.join(os.path.dirname(__file__), "..", "test_audio")
 
 failures = []
@@ -163,12 +163,41 @@ def test_noise_gate():
           loud_atten_db < 6, f"burst attenuation={loud_atten_db:.1f} dB (want < 6 dB)")
 
 
+def test_limiter():
+    from gen_test_signal import write_wav
+    t = np.arange(int(1.0 * SR)) / SR
+    loud = 0.95 * np.sin(2 * np.pi * 440 * t)
+    quiet = 0.2 * np.sin(2 * np.pi * 440 * t)
+    loud_in = os.path.join(AUDIO, "_limiter_loud.wav")
+    loud_out = os.path.join(AUDIO, "_limiter_loud_out.wav")
+    quiet_in = os.path.join(AUDIO, "_limiter_quiet.wav")
+    quiet_out = os.path.join(AUDIO, "_limiter_quiet_out.wav")
+    write_wav(loud_in, loud)
+    write_wav(quiet_in, quiet)
+    run_engine("--input", loud_in, "--output", loud_out, "--effects", "limiter",
+               "--limiter-threshold", "0.5", "--buffer-size", "512")
+    run_engine("--input", quiet_in, "--output", quiet_out, "--effects", "limiter",
+               "--limiter-threshold", "0.5", "--buffer-size", "512")
+    out, _ = read_wav(loud_out)
+    peak = float(np.max(np.abs(out)))
+    # 16-bit quantisation adds up to one LSB (about 3e-5) above the 0.5 ceiling.
+    check("limiter keeps a 0.95-peak tone at or below the 0.5 ceiling",
+          peak <= 0.5 + 1e-4, f"output peak = {peak:.4f}")
+    check("limiter still passes signal (does not mute)", peak > 0.45, f"output peak = {peak:.4f}")
+    q_orig, _ = read_wav(quiet_in)
+    q_out, _ = read_wav(quiet_out)
+    max_diff = float(np.max(np.abs(q_orig - q_out)))
+    check("limiter leaves a signal below the ceiling unchanged",
+          max_diff < 1e-4, f"max difference = {max_diff:.6f}")
+
+
 def main():
     test_lowpass()
     test_highpass()
     test_filter_rolloff_direction()
     test_delay()
     test_noise_gate()
+    test_limiter()
 
     print()
     if failures:

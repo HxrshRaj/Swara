@@ -49,6 +49,7 @@ def list_effects():
             "delay_ms": 300.0, "delay_feedback": 0.35, "delay_mix": 0.35,
             "gate_frame": 1024, "gate_threshold_db": 10.0,
             "gate_floor_db": -26.0, "gate_knee_db": 6.0,
+            "limiter_threshold": 0.89, "limiter_attack_ms": 1.0, "limiter_release_ms": 80.0,
         },
     }
 
@@ -69,6 +70,9 @@ async def process_audio(
     gate_threshold_db: float | None = Form(None),
     gate_floor_db: float | None = Form(None),
     gate_knee_db: float | None = Form(None),
+    limiter_threshold: float | None = Form(None),
+    limiter_attack_ms: float | None = Form(None),
+    limiter_release_ms: float | None = Form(None),
     benchmark: bool = Form(False),
 ):
     if not file.filename.lower().endswith(".wav"):
@@ -93,6 +97,8 @@ async def process_audio(
             "delay_ms": delay_ms, "delay_feedback": delay_feedback, "delay_mix": delay_mix,
             "gate_frame": gate_frame, "gate_threshold_db": gate_threshold_db,
             "gate_floor_db": gate_floor_db, "gate_knee_db": gate_knee_db,
+            "limiter_threshold": limiter_threshold, "limiter_attack_ms": limiter_attack_ms,
+            "limiter_release_ms": limiter_release_ms,
         }
 
         benchmark_sizes = [64, 128, 256, 512, 1024, 2048] if benchmark else None

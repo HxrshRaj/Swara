@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  c-module:
+    name: C11 module (${{ matrix.cc }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cc: [gcc, clang]
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests
+        run: make test CC=${{ matrix.cc }}
+      - name: Tests under AddressSanitizer and UndefinedBehaviorSanitizer
+        run: make test-asan CC=${{ matrix.cc }}
+      - name: Tests under ThreadSanitizer
+        run: make test-tsan CC=${{ matrix.cc }}
+
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y cppcheck
+      - name: cppcheck on the C11 module
+        run: |
+          cppcheck --enable=warning,style,performance,portability --std=c11 \
+            --error-exitcode=1 --inline-suppr -Iengine/c/include \
+            engine/c/src engine/c/tests
+
+  engine:
+    name: Engine build and DSP correctness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install numpy
+      - name: Build engine
+        run: make -C engine
+      - name: Generate test signals
+        run: cd engine && python tools/gen_test_signal.py
+      - name: Independent correctness checks (filters, delay, gate, limiter)
+        run: cd engine && python tools/verify_correctness.py
+      - name: Ring buffer throughput (measured, informational)
+        run: |
+          cd engine
+          cc -std=c11 -O2 -Ic/include -pthread c/tests/bench_ring.c c/src/swara_ring.c -o build/bench_ring
+          ./build/bench_ring
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: cd frontend && npm ci && npm run build

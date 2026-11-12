@@ -11,6 +11,7 @@
 #include "biquad.h"
 #include "delay_line.h"
 #include "spectral_gate.h"
+#include "limiter.h"
 #include "effect.h"
 #include "latency.h"
 
@@ -39,6 +40,10 @@ struct Args {
     double gateThresholdDb = 10.0;
     double gateFloorDb = -26.0;
     double gateKneeDb = 6.0;
+
+    float limiterThreshold = 0.89f; // linear ceiling (about -1 dBFS)
+    double limiterAttackMs = 1.0;
+    double limiterReleaseMs = 80.0;
 };
 
 std::map<std::string, std::string> parseFlags(int argc, char** argv) {
@@ -64,6 +69,9 @@ Args parseArgs(int argc, char** argv) {
         auto it = flags.find(k);
         return it != flags.end() ? it->second : def;
     };
+    a.limiterThreshold = std::stof(get("limiter-threshold", std::to_string(a.limiterThreshold)));
+    a.limiterAttackMs = std::stod(get("limiter-attack-ms", std::to_string(a.limiterAttackMs)));
+    a.limiterReleaseMs = std::stod(get("limiter-release-ms", std::to_string(a.limiterReleaseMs)));
     a.input = get("input", "");
     a.output = get("output", "");
     a.effects = get("effects", a.effects);
@@ -108,6 +116,8 @@ std::vector<std::unique_ptr<Effect>> buildChain(const std::vector<std::string>& 
             chain.push_back(std::make_unique<DelayEffect>(a.delayMs, sampleRate, a.delayFeedback, a.delayMix));
         } else if (n == "noisegate") {
             chain.push_back(std::make_unique<SpectralNoiseGate>(a.gateFrame, sampleRate, a.gateThresholdDb, a.gateFloorDb, a.gateKneeDb));
+        } else if (n == "limiter") {
+            chain.push_back(std::make_unique<LimiterEffect>(a.limiterThreshold, a.limiterAttackMs, a.limiterReleaseMs, sampleRate));
         } else {
             throw std::runtime_error("Unknown effect: " + n);
         }
