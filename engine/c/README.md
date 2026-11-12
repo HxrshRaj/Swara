@@ -34,9 +34,12 @@ whole engine is run under ThreadSanitizer in CI. The `limiter` effect calls `swa
 
 ## Bug found by fuzzing
 
-A random-input driver (`c/tests/fuzz_rt.c`) found that a NaN input sample made the limiter output NaN, and that
-a long run of infinities could drive the gain to zero. Both are fixed (NaN becomes silence, infinities are clamped
-to the largest finite value) and covered by a regression test.
+The fuzz target (`c/tests/fuzz_rt.c`) found two real bugs in the limiter, both fixed with regression tests:
+
+1. A NaN input sample made the output NaN, and a long run of infinities could drive the gain to zero
+   (found by the random-input driver). NaN now becomes silence and infinities are clamped to the largest finite value.
+2. A denormal time constant combined with a huge sample rate gave a NaN smoothing coefficient (0 times infinity),
+   found by clang libFuzzer in CI. The coefficient is now computed in double precision, and infinite parameters are rejected.
 
 ## Build and test
 

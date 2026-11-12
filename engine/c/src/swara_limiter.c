@@ -3,8 +3,12 @@
 #include <math.h>
 
 static float coeff_from_ms(float ms, float sr) {
-    /* one-pole smoothing coefficient for a time constant of `ms` milliseconds */
-    return expf(-1.0f / (0.001f * ms * sr));
+    /* One-pole smoothing coefficient for a time constant of `ms` milliseconds.
+       Computed in double: with float arithmetic a tiny time constant times a huge sample rate
+       could give 0 * inf = NaN (found by libFuzzer). A time constant of zero means "instant". */
+    double samples = 0.001 * (double)ms * (double)sr;
+    if (!(samples > 0.0)) return 0.0f;
+    return (float)exp(-1.0 / samples);
 }
 
 swara_status swara_limiter_init(swara_limiter *l, float threshold, float attack_ms,
@@ -12,6 +16,9 @@ swara_status swara_limiter_init(swara_limiter *l, float threshold, float attack_
     if (l == NULL) return SWARA_ERR_ARG;
     if (!(threshold > 0.0f && threshold <= 1.0f)) return SWARA_ERR_ARG;
     if (!(attack_ms > 0.0f && release_ms > 0.0f && sample_rate_hz > 0.0f)) return SWARA_ERR_ARG;
+    /* reject infinities too: they are positive, so the checks above let them through */
+    if (!(isfinite(threshold) && isfinite(attack_ms) && isfinite(release_ms) && isfinite(sample_rate_hz)))
+        return SWARA_ERR_ARG;
     l->threshold = threshold;
     l->attack_coeff = coeff_from_ms(attack_ms, sample_rate_hz);
     l->release_coeff = coeff_from_ms(release_ms, sample_rate_hz);

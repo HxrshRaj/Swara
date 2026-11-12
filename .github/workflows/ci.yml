@@ -43,9 +43,8 @@ jobs:
           PY
 
   libfuzzer:
-    name: libFuzzer (30 s, informational)
+    name: libFuzzer (30 s)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - run: make -C engine fuzz-libfuzzer FUZZ_SECS=30

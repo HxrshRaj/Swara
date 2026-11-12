@@ -211,6 +211,22 @@ static void test_limiter_nan_and_infinity(void) {
     CHECK(l.gain > 0.0f && isfinite(res[1999]));
 }
 
+static void test_limiter_extreme_parameters(void) {
+    /* Regression for a crash libFuzzer found: denormal time constants with a huge sample rate
+       produced NaN smoothing coefficients (0 * inf). Infinite parameters are now rejected too. */
+    swara_limiter l; float in[4] = {1.0f, -1.0f, 0.5f, 3.0f}, out[4];
+    CHECK(swara_limiter_init(&l, 3.9e-41f, 2.8e-15f, 1.4e-43f, INFINITY) == SWARA_ERR_ARG);
+    CHECK(swara_limiter_init(&l, 0.5f, INFINITY, 10.0f, 48000.0f) == SWARA_ERR_ARG);
+    CHECK(swara_limiter_init(&l, 3.9e-41f, 2.8e-15f, 1.4e-43f, 3.0e38f) == SWARA_OK);
+    CHECK(isfinite(l.attack_coeff) && isfinite(l.release_coeff));
+    CHECK(l.attack_coeff >= 0.0f && l.attack_coeff <= 1.0f);
+    CHECK(l.release_coeff >= 0.0f && l.release_coeff <= 1.0f);
+    CHECK(swara_limiter_process(&l, in, out, 4) == SWARA_OK);
+    int ok = 1;
+    for (int i = 0; i < 4; ++i) ok &= (isfinite(out[i]) && fabsf(out[i]) <= l.threshold);
+    CHECK(ok);
+}
+
 int main(void) {
     test_ring_init_validation();
     test_ring_size_helpers();
@@ -227,6 +243,7 @@ int main(void) {
     test_limiter_null_and_zero_length();
     test_limiter_block_size_independence();
     test_limiter_nan_and_infinity();
+    test_limiter_extreme_parameters();
     printf("%d checks, %d failed\n", g_run, g_failed);
     return g_failed == 0 ? 0 : 1;
 }

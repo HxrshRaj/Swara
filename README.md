@@ -222,18 +222,17 @@ available as the `limiter` effect in the engine CLI, the API and the web UI.
 sample-for-sample identical to the single-threaded path for every effect, and the whole engine runs under
 ThreadSanitizer in CI.
 
-Measured on a 2-core Xeon @ 2.10 GHz in a cloud container: 130 unit checks pass under gcc and clang,
+Measured on a 2-core Xeon @ 2.10 GHz in a cloud container: 138 unit checks pass under gcc and clang,
 including AddressSanitizer, UndefinedBehaviorSanitizer and ThreadSanitizer runs (the ring buffer has a
-two-thread, 2-million-sample ordering test). Line coverage of the two C files is 100% (gcov). A random-input
-driver found a real bug (NaN input made the limiter output NaN); it is fixed with a regression test, and
-1,000,000 random inputs now pass under ASan and UBSan. Breaking the limiter's output clamp or the ring's
+two-thread, 2-million-sample ordering test). Line coverage of the two C files is 100% (gcov). Fuzzing found two real
+bugs in the limiter (NaN input, and a NaN smoothing coefficient from extreme parameters, the second found by
+clang libFuzzer in CI); both are fixed with regression tests, and 1,000,000 random inputs now pass under ASan and UBSan. Breaking the limiter's output clamp or the ring's
 wrap-around on purpose makes tests fail. The two-thread ring buffer moved about 276 to 330 million samples
 per second over three runs of `bench_ring` on that machine.
 
 Honest limits: the module is not certified and makes no claim of MISRA C or DO-178C compliance; the
 benchmark is from one shared cloud machine, so treat the numbers as indicative; the threaded mode is for
-one file at a time, not a live audio device; the libFuzzer CI job is informational because it depends on
-the runner having the fuzzer runtime.
+one file at a time, not a live audio device.
 Details: [`engine/c/README.md`](engine/c/README.md).
 
 ## Repository layout
