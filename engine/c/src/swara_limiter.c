@@ -1,4 +1,5 @@
 #include "swara_limiter.h"
+#include <float.h>
 #include <math.h>
 
 static float coeff_from_ms(float ms, float sr) {
@@ -26,6 +27,11 @@ swara_status swara_limiter_process(swara_limiter *l, const float *in, float *out
     if (l == NULL || (n > 0U && (in == NULL || out == NULL))) return SWARA_ERR_ARG;
     for (size_t i = 0; i < n; ++i) {
         float x = in[i];
+        /* found by fuzzing: NaN would propagate to the output, and infinity can underflow the
+           gain to zero and produce NaN. NaN becomes silence; infinities become the largest finite value. */
+        if (x != x) x = 0.0f;
+        else if (x > FLT_MAX) x = FLT_MAX;
+        else if (x < -FLT_MAX) x = -FLT_MAX;
         float peak = fabsf(x);
         /* gain needed so this sample sits at or below the threshold */
         float target = (peak > l->threshold) ? (l->threshold / peak) : 1.0f;

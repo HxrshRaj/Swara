@@ -217,15 +217,23 @@ preferred instead.
 a lock-free single-producer/single-consumer ring buffer (C11 atomics) and a peak limiter. The limiter is
 available as the `limiter` effect in the engine CLI, the API and the web UI.
 
-Measured on a 2-core Xeon @ 2.10 GHz in a cloud container: 120 unit checks pass under gcc and clang,
+`engine --threaded` (also a checkbox in the web UI) runs the effect chain as a three-thread pipeline
+(reader, DSP, collector) that passes blocks through two of these ring buffers. Its output is checked to be
+sample-for-sample identical to the single-threaded path for every effect, and the whole engine runs under
+ThreadSanitizer in CI.
+
+Measured on a 2-core Xeon @ 2.10 GHz in a cloud container: 130 unit checks pass under gcc and clang,
 including AddressSanitizer, UndefinedBehaviorSanitizer and ThreadSanitizer runs (the ring buffer has a
-two-thread, 2-million-sample ordering test). Breaking the limiter's output clamp or the ring's wrap-around
-on purpose makes tests fail, so the tests do catch those bugs. The two-thread ring buffer moved about
-276 to 330 million samples per second over three runs of `bench_ring` on that machine.
+two-thread, 2-million-sample ordering test). Line coverage of the two C files is 100% (gcov). A random-input
+driver found a real bug (NaN input made the limiter output NaN); it is fixed with a regression test, and
+1,000,000 random inputs now pass under ASan and UBSan. Breaking the limiter's output clamp or the ring's
+wrap-around on purpose makes tests fail. The two-thread ring buffer moved about 276 to 330 million samples
+per second over three runs of `bench_ring` on that machine.
 
 Honest limits: the module is not certified and makes no claim of MISRA C or DO-178C compliance; the
-benchmark is from one shared cloud machine, so treat the numbers as indicative; the ring buffer is not yet
-used to hand audio between threads in the engine itself (the engine is still single-threaded per file).
+benchmark is from one shared cloud machine, so treat the numbers as indicative; the threaded mode is for
+one file at a time, not a live audio device; the libFuzzer CI job is informational because it depends on
+the runner having the fuzzer runtime.
 Details: [`engine/c/README.md`](engine/c/README.md).
 
 ## Repository layout

@@ -6,12 +6,15 @@
 #include <memory>
 #include <map>
 #include <algorithm>
+#include <thread>
+#include <atomic>
 
 #include "wav_io.h"
 #include "biquad.h"
 #include "delay_line.h"
 #include "spectral_gate.h"
 #include "limiter.h"
+#include "ring_buffer.h"
 #include "effect.h"
 #include "latency.h"
 
@@ -41,6 +44,7 @@ struct Args {
     double gateFloorDb = -26.0;
     double gateKneeDb = 6.0;
 
+    bool threaded = false; // three-thread pipeline connected by lock-free ring buffers
     float limiterThreshold = 0.89f; // linear ceiling (about -1 dBFS)
     double limiterAttackMs = 1.0;
     double limiterReleaseMs = 80.0;
@@ -72,6 +76,7 @@ Args parseArgs(int argc, char** argv) {
     a.limiterThreshold = std::stof(get("limiter-threshold", std::to_string(a.limiterThreshold)));
     a.limiterAttackMs = std::stod(get("limiter-attack-ms", std::to_string(a.limiterAttackMs)));
     a.limiterReleaseMs = std::stod(get("limiter-release-ms", std::to_string(a.limiterReleaseMs)));
+    a.threaded = flags.count("threaded") > 0;
     a.input = get("input", "");
     a.output = get("output", "");
     a.effects = get("effects", a.effects);
@@ -160,6 +165,65 @@ std::vector<float> processChannelStreaming(const std::vector<float>& input,
     return output;
 }
 
+// Same processing as processChannelStreaming, but split across three threads that
+// hand fixed-size blocks to each other through lock-free SPSC ring buffers
+// (the C11 swara_ring): a reader thread feeds blocks, the DSP thread runs the
+// effect chain, and the calling thread collects the output. Output is identical
+// to the single-threaded path (checked in tools/verify_correctness.py).
+std::vector<float> processChannelThreaded(const std::vector<float>& input,
+                                           std::vector<std::unique_ptr<Effect>>& chain,
+                                           int bufferSize,
+                                           std::map<std::string, LatencyStats>& stats) {
+    std::vector<float> output(input.size());
+    const size_t bs = (size_t)bufferSize;
+    size_t cap = 2;
+    while (cap < bs * 8) cap <<= 1;           // room for several blocks, power of two
+    SpscRing inRing(cap), outRing(cap);
+    const size_t blocks = (input.size() + bs - 1) / bs;
+    std::map<std::string, LatencyStats> dspStats;
+
+    std::thread reader([&] {
+        std::vector<float> blk(bs);
+        for (size_t b = 0; b < blocks; ++b) {
+            size_t pos = b * bs;
+            size_t n = std::min(bs, input.size() - pos);
+            std::fill(blk.begin(), blk.end(), 0.0f);
+            for (size_t i = 0; i < n; ++i) blk[i] = input[pos + i];
+            while (!inRing.write(blk.data(), bs)) std::this_thread::yield();
+        }
+    });
+
+    std::thread dsp([&] {
+        std::vector<float> bufA(bs), bufB(bs);
+        for (size_t b = 0; b < blocks; ++b) {
+            while (!inRing.read(bufA.data(), bs)) std::this_thread::yield();
+            Stopwatch totalTimer;
+            float* cur = bufA.data();
+            float* nxt = bufB.data();
+            for (auto& fx : chain) {
+                Stopwatch fxTimer;
+                fx->process(cur, nxt, bufferSize);
+                dspStats[fx->name()].record(fxTimer.elapsedMicroseconds());
+                std::swap(cur, nxt);
+            }
+            dspStats["pipeline_total"].record(totalTimer.elapsedMicroseconds());
+            while (!outRing.write(cur, bs)) std::this_thread::yield();
+        }
+    });
+
+    std::vector<float> blk(bs);
+    for (size_t b = 0; b < blocks; ++b) {
+        while (!outRing.read(blk.data(), bs)) std::this_thread::yield();
+        size_t pos = b * bs;
+        size_t n = std::min(bs, input.size() - pos);
+        for (size_t i = 0; i < n; ++i) output[pos + i] = blk[i];
+    }
+    reader.join();
+    dsp.join();
+    for (auto& [k, v] : dspStats) stats[k] = v;
+    return output;
+}
+
 std::string jsonEscape(const std::string& s) {
     std::string out;
     for (char c : s) {
@@ -193,7 +257,7 @@ int main(int argc, char** argv) {
     try {
         Args a = parseArgs(argc, argv);
         if (a.input.empty() || a.output.empty()) {
-            std::cerr << "Usage: swara_engine --input in.wav --output out.wav --effects lowpass,delay,noisegate "
+            std::cerr << "Usage: swara_engine --input in.wav --output out.wav [--threaded] --effects lowpass,delay,noisegate,limiter "
                          "[--buffer-size 512] [--stats-out stats.json] [--benchmark-sizes 64,128,256,512,1024,2048]\n";
             return 1;
         }
@@ -209,7 +273,7 @@ int main(int argc, char** argv) {
         std::map<std::string, LatencyStats> mainRunStats;
         for (uint16_t c = 0; c < in.numChannels; ++c) {
             auto chain = buildChain(effectNames, in.sampleRate, a);
-            out.channels[c] = processChannelStreaming(in.channels[c], chain, a.bufferSize, mainRunStats);
+            out.channels[c] = (a.threaded ? processChannelThreaded : processChannelStreaming)(in.channels[c], chain, a.bufferSize, mainRunStats);
         }
 
         writeWav(a.output, out);

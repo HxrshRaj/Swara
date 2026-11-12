@@ -1,5 +1,8 @@
 #include "swara_ring.h"
 
+size_t swara_ring_sizeof(void) { return sizeof(swara_ring); }
+size_t swara_ring_alignof(void) { return _Alignof(swara_ring); }
+
 static int is_pow2(size_t v) { return v >= 2U && (v & (v - 1U)) == 0U; }
 
 swara_status swara_ring_init(swara_ring *r, float *storage, size_t capacity) {

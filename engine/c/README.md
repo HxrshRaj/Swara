@@ -25,6 +25,19 @@ These rules are inspired by common safety-critical C practice. The code is **not
 
 For each sample the limiter computes the gain that would bring that sample to the ceiling, then moves its current gain toward that target with a one-pole smoother: fast (attack) when it must reduce gain, slow (release) when it recovers. Smoothing can lag a sharp peak, so the final sample is also clamped to the ceiling. The output therefore never exceeds the threshold, and signals below it pass through unchanged. State is carried across calls, so the result does not depend on the block size (tested).
 
+## Where it is used
+
+`engine --threaded` runs the effect chain as a three-thread pipeline (reader, DSP, collector) that hands
+fixed-size blocks between threads through two `swara_ring` buffers (C++ wrapper: `include/ring_buffer.h`).
+The output is checked to be sample-for-sample identical to the single-threaded path for every effect, and the
+whole engine is run under ThreadSanitizer in CI. The `limiter` effect calls `swara_limiter` through `extern "C"`.
+
+## Bug found by fuzzing
+
+A random-input driver (`c/tests/fuzz_rt.c`) found that a NaN input sample made the limiter output NaN, and that
+a long run of infinities could drive the gain to zero. Both are fixed (NaN becomes silence, infinities are clamped
+to the largest finite value) and covered by a regression test.
+
 ## Build and test
 
 ```bash
@@ -32,6 +45,10 @@ cd engine
 make test          # plain build and tests
 make test-asan     # AddressSanitizer + UndefinedBehaviorSanitizer
 make test-tsan     # ThreadSanitizer (two-thread ring buffer stress)
+make coverage      # gcov line coverage of the C module
+make fuzz          # 1,000,000 random inputs under ASan and UBSan
+make fuzz-libfuzzer  # clang libFuzzer, if the runtime is installed
+make engine-tsan   # whole engine under ThreadSanitizer (run it with --threaded)
 ```
 
 `c/tests/bench_ring.c` measures two-thread ring throughput; run it with the command shown in `.github/workflows/ci.yml`.

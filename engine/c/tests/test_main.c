@@ -22,6 +22,10 @@ static void test_ring_init_validation(void) {
     CHECK(swara_ring_available(&r) == 0);
     CHECK(swara_ring_space(&r) == 7);
 }
+static void test_ring_size_helpers(void) {
+    CHECK(swara_ring_sizeof() == sizeof(swara_ring));
+    CHECK(swara_ring_alignof() >= 1U && (swara_ring_alignof() & (swara_ring_alignof() - 1U)) == 0U);
+}
 static void test_ring_basic_roundtrip(void) {
     float buf[8], out[4]; swara_ring r;
     const float in[4] = {1.f, 2.f, 3.f, 4.f};
@@ -188,8 +192,28 @@ static void test_limiter_block_size_independence(void) {
     CHECK(memcmp(out_a, out_b, sizeof out_a) == 0);
 }
 
+static void test_limiter_nan_and_infinity(void) {
+    /* Regression for a bug the fuzzer found: NaN input used to produce NaN output. */
+    swara_limiter l; float in[6], out[6];
+    CHECK(swara_limiter_init(&l, 0.5f, 1.0f, 10.0f, 48000.0f) == SWARA_OK);
+    in[0] = NAN; in[1] = INFINITY; in[2] = -INFINITY; in[3] = 0.2f; in[4] = NAN; in[5] = -0.2f;
+    CHECK(swara_limiter_process(&l, in, out, 6) == SWARA_OK);
+    int ok = 1;
+    for (int i = 0; i < 6; ++i) ok &= (isfinite(out[i]) && fabsf(out[i]) <= 0.5f);
+    CHECK(ok);
+    CHECK(out[0] == 0.0f);                       /* NaN becomes silence */
+    CHECK(out[1] > 0.0f && out[2] < 0.0f);       /* infinities keep their sign */
+    CHECK(l.gain > 0.0f && l.gain <= 1.0f);
+    /* a long run of infinities must not drive the gain to zero or NaN */
+    float big[2000], res[2000];
+    for (int i = 0; i < 2000; ++i) big[i] = INFINITY;
+    CHECK(swara_limiter_process(&l, big, res, 2000) == SWARA_OK);
+    CHECK(l.gain > 0.0f && isfinite(res[1999]));
+}
+
 int main(void) {
     test_ring_init_validation();
+    test_ring_size_helpers();
     test_ring_basic_roundtrip();
     test_ring_full_and_empty();
     test_ring_wraparound();
@@ -202,6 +226,7 @@ int main(void) {
     test_limiter_handles_negative_and_inplace();
     test_limiter_null_and_zero_length();
     test_limiter_block_size_independence();
+    test_limiter_nan_and_infinity();
     printf("%d checks, %d failed\n", g_run, g_failed);
     return g_failed == 0 ? 0 : 1;
 }

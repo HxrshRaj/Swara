@@ -74,6 +74,7 @@ async def process_audio(
     limiter_attack_ms: float | None = Form(None),
     limiter_release_ms: float | None = Form(None),
     benchmark: bool = Form(False),
+    threaded: bool = Form(False),
 ):
     if not file.filename.lower().endswith(".wav"):
         raise HTTPException(400, "Only .wav files are supported")
@@ -106,7 +107,7 @@ async def process_audio(
         try:
             result = run_engine(
                 input_path, effect_list, buffer_size=buffer_size,
-                params=params, benchmark_sizes=benchmark_sizes,
+                params=params, benchmark_sizes=benchmark_sizes, threaded=threaded,
             )
         except EngineError as e:
             raise HTTPException(500, str(e))

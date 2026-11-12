@@ -23,6 +23,32 @@ jobs:
         run: make test-asan CC=${{ matrix.cc }}
       - name: Tests under ThreadSanitizer
         run: make test-tsan CC=${{ matrix.cc }}
+      - name: Fuzz-style random inputs under ASan and UBSan (1,000,000 inputs)
+        run: make fuzz CC=${{ matrix.cc }}
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Line coverage of the C module (gcov)
+        run: make -C engine coverage | tee coverage.txt
+      - name: Fail if line coverage drops below 95%
+        run: |
+          python3 - <<'PY'
+          import re
+          txt = open("coverage.txt").read()
+          pcts = [float(x) for x in re.findall(r"Lines executed:([0-9.]+)%", txt)]
+          print("per-file line coverage:", pcts)
+          assert pcts and min(pcts) >= 95.0, "coverage below 95%"
+          PY
+
+  libfuzzer:
+    name: libFuzzer (30 s, informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: make -C engine fuzz-libfuzzer FUZZ_SECS=30
 
   static-analysis:
     runs-on: ubuntu-latest
@@ -49,6 +75,12 @@ jobs:
         run: cd engine && python tools/gen_test_signal.py
       - name: Independent correctness checks (filters, delay, gate, limiter)
         run: cd engine && python tools/verify_correctness.py
+      - name: Threaded pipeline under ThreadSanitizer
+        run: |
+          cd engine
+          make engine-tsan
+          ./build_tsan/swara_engine --input test_audio/music_like.wav --output /tmp/tsan_out.wav \
+            --effects lowpass,delay,noisegate,limiter --threaded --buffer-size 256
       - name: Ring buffer throughput (measured, informational)
         run: |
           cd engine

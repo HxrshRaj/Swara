@@ -57,6 +57,7 @@ def run_engine(
     buffer_size: int = 512,
     params: Optional[dict] = None,
     benchmark_sizes: Optional[list[int]] = None,
+    threaded: bool = False,
 ) -> ProcessResult:
     if not effects:
         raise EngineError("At least one effect must be selected")
@@ -102,6 +103,9 @@ def run_engine(
     for key, flag in flag_map.items():
         if key in params and params[key] is not None:
             cmd += [flag, str(params[key])]
+
+    if threaded:
+        cmd.append("--threaded")
 
     if benchmark_sizes:
         cmd += ["--benchmark-sizes", ",".join(str(s) for s in benchmark_sizes)]

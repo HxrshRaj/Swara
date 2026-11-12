@@ -191,6 +191,28 @@ def test_limiter():
           max_diff < 1e-4, f"max difference = {max_diff:.6f}")
 
 
+def test_threaded_matches_single_thread():
+    """The three-thread pipeline (reader -> DSP -> collector, linked by the C11
+    lock-free ring buffers) must produce exactly the same samples as the
+    single-threaded path, for every effect and a block size that does not divide
+    the file length."""
+    src = os.path.join(AUDIO, "music_like.wav")
+    cases = [("lowpass", []), ("highpass", []), ("delay", []), ("noisegate", []),
+             ("limiter", ["--limiter-threshold", "0.3"]),
+             ("lowpass,delay,limiter", ["--limiter-threshold", "0.5"])]
+    for effects, extra in cases:
+        a_path = os.path.join(AUDIO, "_single.wav")
+        b_path = os.path.join(AUDIO, "_threaded.wav")
+        base = ["--input", src, "--effects", effects, "--buffer-size", "333"] + extra
+        run_engine(*base, "--output", a_path)
+        run_engine(*base, "--output", b_path, "--threaded")
+        a, _ = read_wav(a_path)
+        b, _ = read_wav(b_path)
+        same = len(a) == len(b) and bool(np.array_equal(a, b))
+        check(f"threaded pipeline output identical to single-thread ({effects})", same,
+              f"length {len(a)} vs {len(b)}")
+
+
 def main():
     test_lowpass()
     test_highpass()
@@ -198,6 +220,7 @@ def main():
     test_delay()
     test_noise_gate()
     test_limiter()
+    test_threaded_matches_single_thread()
 
     print()
     if failures:

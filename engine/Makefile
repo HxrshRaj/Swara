@@ -1,6 +1,6 @@
 CXX ?= g++
 CC ?= gcc
-CXXFLAGS = -std=c++17 -O2 -Wall -Iinclude -Ithird_party/kissfft
+CXXFLAGS = -std=c++17 -O2 -Wall -pthread -Iinclude -Ithird_party/kissfft
 CFLAGS = -O2 -Iinclude -Ithird_party/kissfft
 RT_CFLAGS = -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror -Ic/include
 BUILD = build
@@ -27,12 +27,12 @@ C_OBJS = $(patsubst third_party/kissfft/%.c,$(BUILD)/kissfft_%.o,$(C_SRCS))
 RT_SRCS = c/src/swara_ring.c c/src/swara_limiter.c
 RT_OBJS = $(patsubst c/src/%.c,$(BUILD)/rt_%.o,$(RT_SRCS))
 
-.PHONY: all clean test test-asan test-tsan
+.PHONY: all clean test test-asan test-tsan engine-tsan coverage fuzz fuzz-libfuzzer
 
 all: $(BIN)
 
 $(BIN): $(CPP_OBJS) $(C_OBJS) $(RT_OBJS) | $(BUILD)
-	$(CXX) $(CPP_OBJS) $(C_OBJS) $(RT_OBJS) $(STATIC) -lm -o $@
+	$(CXX) $(CPP_OBJS) $(C_OBJS) $(RT_OBJS) $(STATIC) -pthread -lm -o $@
 
 $(BUILD)/%.o: src/%.cpp | $(BUILD)
 	$(CXX) $(CXXFLAGS) -Ic/include -c $< -o $@
@@ -68,3 +68,27 @@ test-asan: | $(BUILD)
 test-tsan: | $(BUILD)
 	$(CC) $(TEST_FLAGS) -O1 -fsanitize=thread $(TEST_SRC) -lm -o $(TEST_BIN)_tsan
 	./$(TEST_BIN)_tsan
+
+# Whole engine under ThreadSanitizer (exercises the threaded pipeline). Output: build_tsan/swara_engine
+engine-tsan:
+	mkdir -p build_tsan
+	$(CC) -std=c11 -O1 -g -fsanitize=thread -Ic/include -c c/src/swara_ring.c -o build_tsan/rt_ring.o
+	$(CC) -std=c11 -O1 -g -fsanitize=thread -Ic/include -c c/src/swara_limiter.c -o build_tsan/rt_lim.o
+	$(CC) -O1 -g -fsanitize=thread -Iinclude -Ithird_party/kissfft -c third_party/kissfft/kiss_fft.c -o build_tsan/kf.o
+	$(CC) -O1 -g -fsanitize=thread -Iinclude -Ithird_party/kissfft -c third_party/kissfft/kiss_fftr.c -o build_tsan/kfr.o
+	$(CXX) -std=c++17 -O1 -g -fsanitize=thread -pthread -Iinclude -Ic/include -Ithird_party/kissfft src/main.cpp src/wav_io.cpp src/biquad.cpp src/delay_line.cpp src/spectral_gate.cpp src/limiter.cpp build_tsan/rt_ring.o build_tsan/rt_lim.o build_tsan/kf.o build_tsan/kfr.o -lm -o build_tsan/swara_engine
+
+# Line coverage of the C module (gcov). Prints a per-file summary.
+coverage: | $(BUILD)
+	mkdir -p $(BUILD)/cov
+	cd $(BUILD)/cov && $(CC) -std=c11 -O0 -g --coverage -I../../c/include -pthread ../../c/tests/test_main.c ../../c/src/swara_ring.c ../../c/src/swara_limiter.c -lm -o t && ./t && gcov -b -o . t-swara_ring.gcda t-swara_limiter.gcda | grep -A3 "File '../../c/src"
+
+# Fuzzing: clang libFuzzer if available, otherwise the standalone random driver (gcc or clang).
+FUZZ_SECS ?= 30
+fuzz: | $(BUILD)
+	$(CC) -std=c11 -g -O1 -DFUZZ_STANDALONE -fsanitize=address,undefined -fno-sanitize-recover=all -Ic/include c/tests/fuzz_rt.c c/src/swara_ring.c c/src/swara_limiter.c -lm -o $(BUILD)/fuzz_standalone
+	./$(BUILD)/fuzz_standalone 1000000
+
+fuzz-libfuzzer: | $(BUILD)
+	clang -std=c11 -g -O1 -fsanitize=fuzzer,address,undefined -Ic/include c/tests/fuzz_rt.c c/src/swara_ring.c c/src/swara_limiter.c -lm -o $(BUILD)/fuzz_lf
+	./$(BUILD)/fuzz_lf -max_total_time=$(FUZZ_SECS)

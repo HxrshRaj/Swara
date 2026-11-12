@@ -72,6 +72,7 @@ export default function App() {
   const [delayFeedback, setDelayFeedback] = useState(0.35);
   const [delayMix, setDelayMix] = useState(0.35);
   const [limiterThreshold, setLimiterThreshold] = useState(0.89);
+  const [threaded, setThreaded] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -123,6 +124,7 @@ export default function App() {
     form.append("delay_feedback", String(delayFeedback));
     form.append("delay_mix", String(delayMix));
     form.append("limiter_threshold", String(limiterThreshold));
+    form.append("threaded", String(threaded));
 
     try {
       const res = await fetch(`${API_URL}/api/process`, { method: "POST", body: form });
@@ -216,6 +218,10 @@ export default function App() {
               </label>
             </>
           )}
+          <label>
+            <input type="checkbox" checked={threaded} onChange={(e) => setThreaded(e.target.checked)} />
+            {" "}Three-thread pipeline (C11 lock-free ring buffers)
+          </label>
           {selected.limiter && (
             <label>
               Limiter ceiling (0 to 1, linear)
